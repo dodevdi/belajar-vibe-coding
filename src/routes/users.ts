@@ -26,7 +26,11 @@ export const userRoutes = new Elysia({ prefix: "/users" })
   .post(
     "/",
     async ({ body, set }) => {
-      const [result] = await db.insert(users).values(body);
+      const [result] = await db.insert(users).values({
+        name: body.name,
+        email: body.email,
+        password: body.password || "password",
+      });
       set.status = 201;
       return {
         status: 201,
@@ -41,6 +45,7 @@ export const userRoutes = new Elysia({ prefix: "/users" })
       body: t.Object({
         name: t.String({ minLength: 1 }),
         email: t.String({ format: "email" }),
+        password: t.Optional(t.String()),
       }),
     }
   )
