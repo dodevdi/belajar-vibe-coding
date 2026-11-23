@@ -14,6 +14,13 @@ export interface LoginUserInput {
   password: string;
 }
 
+export interface CurrentUserResponse {
+  id: number;
+  name: string;
+  email: string;
+  created_at: Date;
+}
+
 export class UserServiceError extends Error {
   statusCode: number;
 
@@ -72,4 +79,40 @@ export async function loginUser(input: LoginUserInput): Promise<string> {
   });
 
   return token;
+}
+
+export async function getCurrentUser(token: string): Promise<CurrentUserResponse> {
+  const existingSessions = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.token, token))
+    .limit(1);
+
+  const session = existingSessions[0];
+  if (!session || session.userId === null) {
+    throw new UserServiceError("Unauthorized", 401);
+  }
+
+  const existingUsers = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(eq(users.id, session.userId))
+    .limit(1);
+
+  const user = existingUsers[0];
+  if (!user) {
+    throw new UserServiceError("Unauthorized", 401);
+  }
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    created_at: user.createdAt,
+  };
 }
