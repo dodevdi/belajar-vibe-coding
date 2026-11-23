@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { registerUser, UserServiceError } from "../services/users-service";
+import { registerUser, loginUser, UserServiceError } from "../services/users-service";
 
 export const usersRoute = new Elysia({ prefix: "/api/users" })
   .post(
@@ -24,6 +24,34 @@ export const usersRoute = new Elysia({ prefix: "/api/users" })
     {
       body: t.Object({
         name: t.String({ minLength: 1 }),
+        email: t.String({
+          pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+$",
+        }),
+        password: t.String({ minLength: 1 }),
+      }),
+    }
+  )
+  .post(
+    "/login",
+    async ({ body, set }) => {
+      try {
+        const token = await loginUser(body);
+        set.status = 200;
+        return {
+          data: token,
+        };
+      } catch (error) {
+        if (error instanceof UserServiceError) {
+          set.status = error.statusCode;
+          return {
+            error: error.message,
+          };
+        }
+        throw error;
+      }
+    },
+    {
+      body: t.Object({
         email: t.String({
           pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+$",
         }),

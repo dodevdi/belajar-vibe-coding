@@ -15,6 +15,13 @@
       "when": 1795243744850,
       "tag": "0001_typical_toad_men",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1795405095116,
+      "tag": "0002_magenta_tombstone",
+      "breakpoints": true
     }
   ]
 }
