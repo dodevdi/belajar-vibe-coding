@@ -116,3 +116,20 @@ export async function getCurrentUser(token: string): Promise<CurrentUserResponse
     created_at: user.createdAt,
   };
 }
+
+export async function logoutUser(token: string): Promise<string> {
+  const existingSessions = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.token, token))
+    .limit(1);
+
+  const session = existingSessions[0];
+  if (!session) {
+    throw new UserServiceError("Unauthorized", 401);
+  }
+
+  await db.delete(sessions).where(eq(sessions.token, token));
+
+  return "OK";
+}
