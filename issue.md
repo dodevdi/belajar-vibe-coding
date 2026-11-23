@@ -1,34 +1,32 @@
-# 📋 Fitur: Registrasi User Baru
+# 📋 Fitur: Login User (POST /api/users/login)
 
 ## Deskripsi
 
-Membuat fitur registrasi user baru dengan endpoint `POST /api/users`. Password user di-hash menggunakan **bcrypt** sebelum disimpan ke database. Jika email sudah terdaftar, API mengembalikan pesan error.
+Membuat fitur login user dengan endpoint `POST /api/users/login`. Ketika login berhasil, sistem membuat session baru dengan token UUID dan menyimpannya ke tabel `sessions`. Token dikembalikan ke client sebagai response. Jika email atau password salah, API mengembalikan pesan error.
 
 ---
 
 ## Spesifikasi Tabel Database
 
-### Tabel `users`
+### Tabel `sessions` (baru)
 
 | Kolom        | Tipe           | Constraint                     |
 |--------------|----------------|--------------------------------|
 | `id`         | INTEGER        | PRIMARY KEY, AUTO INCREMENT    |
-| `name`       | VARCHAR(255)   | NOT NULL                       |
-| `email`      | VARCHAR(255)   | NOT NULL, UNIQUE               |
-| `password`   | VARCHAR(255)   | NOT NULL (hash bcrypt)         |
+| `token`      | VARCHAR(255)   | NOT NULL (isinya UUID)         |
+| `user_id`    | INTEGER        | FOREIGN KEY → `users.id`       |
 | `created_at` | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP      |
 
 ---
 
 ## Spesifikasi API
 
-### `POST /api/users` — Registrasi User Baru
+### `POST /api/users/login` — Login User
 
 **Request Body:**
 
 ```json
 {
-  "name": "Dodi",
   "email": "dodi@localhost",
   "password": "rahasia"
 }
@@ -38,15 +36,17 @@ Membuat fitur registrasi user baru dengan endpoint `POST /api/users`. Password u
 
 ```json
 {
-  "data": "OK"
+  "data": "token"
 }
 ```
 
-**Response Body (Error — Email sudah terdaftar) — Status 400:**
+> Nilai `"token"` adalah string UUID yang baru di-generate, contoh: `"550e8400-e29b-41d4-a716-446655440000"`
+
+**Response Body (Error — Email atau password salah) — Status 401:**
 
 ```json
 {
-  "error": "Email sudah terdaftar"
+  "error": "Email atau password salah"
 }
 ```
 
@@ -58,12 +58,12 @@ Membuat fitur registrasi user baru dengan endpoint `POST /api/users`. Password u
 src/
 ├── db/
 │   ├── index.ts            # Koneksi database (sudah ada)
-│   └── schema.ts           # Definisi schema Drizzle (perlu diupdate)
+│   └── schema.ts           # Definisi schema Drizzle (perlu ditambah tabel sessions)
 ├── routes/
-│   └── users-route.ts      # Routing ElysiaJS untuk endpoint users
+│   └── users-route.ts      # Routing ElysiaJS (perlu ditambah endpoint login)
 ├── services/
-│   └── users-service.ts    # Logic bisnis: validasi & simpan user
-└── index.ts                # Entry point server (perlu diupdate)
+│   └── users-service.ts    # Logic bisnis (perlu ditambah fungsi loginUser)
+└── index.ts                # Entry point server (tidak perlu diubah)
 ```
 
 **Konvensi penamaan file:**
@@ -74,26 +74,16 @@ src/
 
 ## Tahapan Implementasi
 
-### Tahap 1: Install Dependency Tambahan
-
-Install library bcrypt untuk hashing password:
-
-```bash
-bun add bcryptjs
-bun add -d @types/bcryptjs
-```
-
-> Gunakan `bcryptjs` (versi pure JS) agar kompatibel dengan Bun tanpa perlu native build.
-
----
-
-### Tahap 2: Update Schema Database
+### Tahap 1: Update Schema Database
 
 Edit file `src/db/schema.ts`:
 
-- Tambahkan kolom `password` bertipe `varchar(255)`, NOT NULL, pada tabel `users`.
-- Pastikan kolom `email` memiliki constraint UNIQUE.
-- Kolom yang harus ada: `id`, `name`, `email`, `password`, `created_at`.
+- Tambahkan definisi tabel baru `sessions` menggunakan Drizzle ORM dengan kolom:
+  - `id` — serial, primary key
+  - `token` — varchar(255), not null
+  - `userId` — integer, foreign key yang mereferensi `users.id`
+  - `createdAt` — timestamp, default now
+- Pastikan relasi foreign key dari `sessions.userId` ke `users.id` terdefinisi.
 
 Setelah schema diupdate, jalankan:
 
@@ -104,50 +94,38 @@ bun run db:migrate
 
 ---
 
-### Tahap 3: Buat Service Layer
+### Tahap 2: Tambahkan Fungsi Login di Service Layer
 
-Buat file baru `src/services/users-service.ts`.
+Edit file `src/services/users-service.ts`, tambahkan fungsi baru:
 
-File ini berisi fungsi-fungsi logic bisnis:
-
-1. **`registerUser(name, email, password)`**
-   - Cek apakah email sudah ada di database menggunakan Drizzle ORM (`SELECT` dengan `WHERE email = ?`).
-   - Jika email sudah ada → throw error atau return objek error `"Email sudah terdaftar"`.
-   - Jika email belum ada:
-     - Hash password menggunakan `bcryptjs` dengan salt rounds 10.
-     - Insert data user baru ke tabel `users` (name, email, hashed password).
-     - Return `"OK"`.
+1. **`loginUser(email, password)`**
+   - Cari user berdasarkan `email` di tabel `users` menggunakan Drizzle ORM (`SELECT` dengan `WHERE email = ?`).
+   - Jika user tidak ditemukan → throw error `"Email atau password salah"`.
+   - Jika user ditemukan:
+     - Bandingkan `password` yang dikirim dengan hash password di database menggunakan `bcryptjs` (`bcrypt.compare()`).
+     - Jika password tidak cocok → throw error `"Email atau password salah"`.
+     - Jika password cocok:
+       - Generate token UUID baru menggunakan `crypto.randomUUID()` (bawaan runtime, tidak perlu install package tambahan).
+       - Insert data session baru ke tabel `sessions` (token, user_id).
+       - Return token UUID tersebut.
 
 ---
 
-### Tahap 4: Buat Route
+### Tahap 3: Tambahkan Endpoint Login di Route
 
-Buat file baru `src/routes/users-route.ts`.
+Edit file `src/routes/users-route.ts`, tambahkan endpoint baru:
 
-File ini berisi definisi endpoint ElysiaJS:
-
-1. Buat instance `Elysia` dengan prefix `/api/users`.
-2. Daftarkan endpoint `POST /` yang:
+1. Daftarkan endpoint `POST /login` yang:
    - Menerima request body dengan validasi menggunakan `t.Object()`:
-     - `name`: `t.String({ minLength: 1 })`
-     - `email`: `t.String({ format: "email" })`
+     - `email`: `t.String()` (dengan pattern validasi email)
      - `password`: `t.String({ minLength: 1 })`
-   - Memanggil fungsi `registerUser()` dari service layer.
-   - Jika berhasil → return `{ "data": "OK" }`.
-   - Jika error (email sudah terdaftar) → set status 400, return `{ "error": "Email sudah terdaftar" }`.
+   - Memanggil fungsi `loginUser()` dari service layer.
+   - Jika berhasil → return `{ "data": "<token UUID>" }` dengan status 200.
+   - Jika error (email/password salah) → set status 401, return `{ "error": "Email atau password salah" }`.
 
 ---
 
-### Tahap 5: Daftarkan Route ke Server
-
-Edit file `src/index.ts`:
-
-- Import `usersRoute` dari `src/routes/users-route.ts`.
-- Daftarkan route menggunakan `.use(usersRoute)`.
-
----
-
-### Tahap 6: Testing Manual
+### Tahap 4: Testing Manual
 
 Jalankan server:
 
@@ -155,9 +133,7 @@ Jalankan server:
 bun run dev
 ```
 
-Test endpoint menggunakan curl atau tool HTTP client:
-
-**Test registrasi berhasil:**
+**Prasyarat:** Pastikan sudah ada user terdaftar di database. Jika belum, registrasi dulu:
 
 ```bash
 curl -X POST http://localhost:3000/api/users \
@@ -165,27 +141,44 @@ curl -X POST http://localhost:3000/api/users \
   -d '{"name": "Dodi", "email": "dodi@localhost", "password": "rahasia"}'
 ```
 
-Expected response: `{ "data": "OK" }`
-
-**Test registrasi gagal (email duplikat):**
+**Test login berhasil:**
 
 ```bash
-curl -X POST http://localhost:3000/api/users \
+curl -X POST http://localhost:3000/api/users/login \
   -H "Content-Type: application/json" \
-  -d '{"name": "Dodi", "email": "dodi@localhost", "password": "rahasia"}'
+  -d '{"email": "dodi@localhost", "password": "rahasia"}'
 ```
 
-Expected response (status 400): `{ "error": "Email sudah terdaftar" }`
+Expected response (status 200): `{ "data": "550e8400-e29b-41d4-a716-446655440000" }` (UUID random)
+
+**Test login gagal (password salah):**
+
+```bash
+curl -X POST http://localhost:3000/api/users/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "dodi@localhost", "password": "salah"}'
+```
+
+Expected response (status 401): `{ "error": "Email atau password salah" }`
+
+**Test login gagal (email tidak terdaftar):**
+
+```bash
+curl -X POST http://localhost:3000/api/users/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "tidak@ada", "password": "rahasia"}'
+```
+
+Expected response (status 401): `{ "error": "Email atau password salah" }`
 
 ---
 
 ## Checklist Penyelesaian
 
-- [x] Dependency `bcryptjs` dan `@types/bcryptjs` terinstall
-- [x] Schema tabel `users` sudah include kolom `password`
-- [x] Migration database berhasil dijalankan
-- [x] File `src/services/users-service.ts` dibuat dengan fungsi `registerUser`
-- [x] File `src/routes/users-route.ts` dibuat dengan endpoint `POST /api/users`
-- [x] Route terdaftar di `src/index.ts`
-- [x] Test registrasi berhasil mengembalikan `{ "data": "OK" }`
-- [x] Test email duplikat mengembalikan `{ "error": "Email sudah terdaftar" }` dengan status 400
+- [x] Tabel `sessions` didefinisikan di `src/db/schema.ts` dengan FK ke `users.id`
+- [x] Migration database berhasil di-generate dan dijalankan
+- [x] Fungsi `loginUser` ditambahkan di `src/services/users-service.ts`
+- [x] Endpoint `POST /login` ditambahkan di `src/routes/users-route.ts`
+- [x] Test login berhasil mengembalikan `{ "data": "<token>" }` dengan status 200
+- [x] Test login dengan password salah mengembalikan `{ "error": "Email atau password salah" }` dengan status 401
+- [x] Test login dengan email tidak terdaftar mengembalikan `{ "error": "Email atau password salah" }` dengan status 401

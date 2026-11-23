@@ -43,12 +43,16 @@ describe("POST /api/users - Registrasi User Baru", () => {
       .limit(1);
 
     expect(saved.length).toBe(1);
-    expect(saved[0].name).toBe(testUser.name);
-    expect(saved[0].email).toBe(testUser.email);
+    const savedUser = saved[0];
+    expect(savedUser).toBeDefined();
+    if (!savedUser) return;
+
+    expect(savedUser.name).toBe(testUser.name);
+    expect(savedUser.email).toBe(testUser.email);
 
     // Password harus di-hash menggunakan bcrypt, bukan plain text
-    expect(saved[0].password).not.toBe(testUser.password);
-    const isPasswordValid = await bcrypt.compare(testUser.password, saved[0].password);
+    expect(savedUser.password).not.toBe(testUser.password);
+    const isPasswordValid = await bcrypt.compare(testUser.password, savedUser.password);
     expect(isPasswordValid).toBe(true);
   });
 
