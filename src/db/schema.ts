@@ -10,8 +10,10 @@ export const users = mysqlTable("users", {
 
 export const sessions = mysqlTable("sessions", {
   id: serial("id").primaryKey(),
-  token: varchar("token", { length: 255 }).notNull(),
-  userId: bigint("user_id", { mode: "number", unsigned: true }).references(() => users.id),
+  token: varchar("token", { length: 255 }).notNull().unique(),
+  userId: bigint("user_id", { mode: "number", unsigned: true })
+    .notNull()
+    .references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

@@ -18,6 +18,7 @@ export interface CurrentUserResponse {
   id: number;
   name: string;
   email: string;
+  createdAt: Date;
   created_at: Date;
 }
 
@@ -113,6 +114,7 @@ export async function getCurrentUser(token: string): Promise<CurrentUserResponse
     id: user.id,
     name: user.name,
     email: user.email,
+    createdAt: user.createdAt,
     created_at: user.createdAt,
   };
 }

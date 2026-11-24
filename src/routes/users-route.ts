@@ -6,13 +6,7 @@ import {
   logoutUser,
   UserServiceError,
 } from "../services/users-service";
-
-function extractBearerToken(authorization?: string): string {
-  if (!authorization || !authorization.startsWith("Bearer ")) {
-    throw new UserServiceError("Unauthorized", 401);
-  }
-  return authorization.slice(7);
-}
+import { extractBearerToken } from "../utils/auth";
 
 export const usersRoute = new Elysia({ prefix: "/api/users" })
   .post(
