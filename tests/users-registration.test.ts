@@ -69,4 +69,42 @@ describe("POST /api/users - Registrasi User Baru", () => {
     const body = (await res.json()) as { error: string };
     expect(body).toEqual({ error: "Email sudah terdaftar" });
   });
+
+  it("gagal registrasi bila name melebihi 255 karakter (status 400)", async () => {
+    const res = await app.handle(
+      new Request("http://localhost:3000/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "A".repeat(256),
+          email: "toolong.name@example.com",
+          password: "rahasia123",
+        }),
+      })
+    );
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { status: number; message: string };
+    expect(body.status).toBe(400);
+    expect(body.message).toBe("Validation Error");
+  });
+
+  it("gagal registrasi bila password melebihi 255 karakter (status 400)", async () => {
+    const res = await app.handle(
+      new Request("http://localhost:3000/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Valid Name",
+          email: "toolong.pwd@example.com",
+          password: "P".repeat(256),
+        }),
+      })
+    );
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { status: number; message: string };
+    expect(body.status).toBe(400);
+    expect(body.message).toBe("Validation Error");
+  });
 });
