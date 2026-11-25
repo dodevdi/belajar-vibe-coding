@@ -8,15 +8,14 @@ import bcrypt from "bcryptjs";
 describe("GET /api/users/current - Get Current User", () => {
   const testUser = {
     name: "Dodi Current",
-    email: "dodi.current@localhost",
-    password: "rahasia",
+    email: "dodi.current@test.com",
+    password: "rahasiaCurrent123",
   };
 
   let testUserId: number;
   let validToken: string;
 
-  beforeAll(async () => {
-    // Bersihkan user lama jika ada
+  const cleanupData = async () => {
     const existing = await db
       .select()
       .from(users)
@@ -26,6 +25,10 @@ describe("GET /api/users/current - Get Current User", () => {
       await db.delete(sessions).where(eq(sessions.userId, u.id));
     }
     await db.delete(users).where(eq(users.email, testUser.email));
+  };
+
+  beforeAll(async () => {
+    await cleanupData();
 
     // Siapkan user
     const hashedPassword = await bcrypt.hash(testUser.password, 10);
@@ -45,11 +48,11 @@ describe("GET /api/users/current - Get Current User", () => {
   });
 
   afterAll(async () => {
-    await db.delete(sessions).where(eq(sessions.userId, testUserId));
-    await db.delete(users).where(eq(users.id, testUserId));
+    await cleanupData();
   });
 
-  it("berhasil get current user dengan token yang valid (status 200, tanpa password)", async () => {
+  // Skenario 1: Berhasil mendapatkan data user dengan token valid
+  it("1. berhasil mendapatkan data user dengan token valid (status 200)", async () => {
     const res = await app.handle(
       new Request("http://localhost:3000/api/users/current", {
         method: "GET",
@@ -67,7 +70,6 @@ describe("GET /api/users/current - Get Current User", () => {
         email: string;
         createdAt: string;
         created_at: string;
-        password?: string;
       };
     };
 
@@ -77,11 +79,30 @@ describe("GET /api/users/current - Get Current User", () => {
     expect(body.data.email).toBe(testUser.email);
     expect(body.data.createdAt).toBeDefined();
     expect(body.data.created_at).toBeDefined();
-    // Pastikan password TIDAK dikembalikan
+  });
+
+  // Skenario 2: Respons tidak mengandung field password
+  it("2. respons tidak mengandung field password", async () => {
+    const res = await app.handle(
+      new Request("http://localhost:3000/api/users/current", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${validToken}`,
+        },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: Record<string, unknown>;
+    };
+
+    expect(body.data).toBeDefined();
     expect(body.data.password).toBeUndefined();
   });
 
-  it("gagal jika header Authorization tidak disertakan (status 401 dan pesan 'Unauthorized')", async () => {
+  // Skenario 3: Header Authorization tidak dikirim
+  it("3. gagal jika header Authorization tidak dikirim (status 401 dan pesan 'Unauthorized')", async () => {
     const res = await app.handle(
       new Request("http://localhost:3000/api/users/current", {
         method: "GET",
@@ -93,8 +114,10 @@ describe("GET /api/users/current - Get Current User", () => {
     expect(body).toEqual({ error: "Unauthorized" });
   });
 
-  it("gagal jika format header Authorization bukan Bearer (status 401 dan pesan 'Unauthorized')", async () => {
-    const res = await app.handle(
+  // Skenario 4: Format header bukan Bearer <token>
+  it("4. gagal jika format header bukan Bearer <token> (status 401 dan pesan 'Unauthorized')", async () => {
+    // Format Basic
+    const resBasic = await app.handle(
       new Request("http://localhost:3000/api/users/current", {
         method: "GET",
         headers: {
@@ -102,18 +125,31 @@ describe("GET /api/users/current - Get Current User", () => {
         },
       })
     );
+    expect(resBasic.status).toBe(401);
+    const bodyBasic = (await resBasic.json()) as { error: string };
+    expect(bodyBasic).toEqual({ error: "Unauthorized" });
 
-    expect(res.status).toBe(401);
-    const body = (await res.json()) as { error: string };
-    expect(body).toEqual({ error: "Unauthorized" });
+    // Format Token tanpa awalan Bearer
+    const resRaw = await app.handle(
+      new Request("http://localhost:3000/api/users/current", {
+        method: "GET",
+        headers: {
+          Authorization: validToken,
+        },
+      })
+    );
+    expect(resRaw.status).toBe(401);
+    const bodyRaw = (await resRaw.json()) as { error: string };
+    expect(bodyRaw).toEqual({ error: "Unauthorized" });
   });
 
-  it("gagal jika token tidak valid / tidak ada di database (status 401 dan pesan 'Unauthorized')", async () => {
+  // Skenario 5: Token tidak valid / tidak ada di database
+  it("5. gagal jika token tidak valid / tidak ada di database (status 401 dan pesan 'Unauthorized')", async () => {
     const res = await app.handle(
       new Request("http://localhost:3000/api/users/current", {
         method: "GET",
         headers: {
-          Authorization: "Bearer token-asal-asalan-12345",
+          Authorization: "Bearer token-palsu-12345",
         },
       })
     );
@@ -121,5 +157,50 @@ describe("GET /api/users/current - Get Current User", () => {
     expect(res.status).toBe(401);
     const body = (await res.json()) as { error: string };
     expect(body).toEqual({ error: "Unauthorized" });
+  });
+
+  // Skenario 6: Token sudah di-logout (tidak valid lagi)
+  it("6. gagal jika token sudah di-logout (status 401)", async () => {
+    // Siapkan token baru khusus skenario logout
+    const logoutTestToken = crypto.randomUUID();
+    await db.insert(sessions).values({
+      token: logoutTestToken,
+      userId: testUserId,
+    });
+
+    // Pastikan token bisa dipakai sebelum logout
+    const resBefore = await app.handle(
+      new Request("http://localhost:3000/api/users/current", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${logoutTestToken}`,
+        },
+      })
+    );
+    expect(resBefore.status).toBe(200);
+
+    // Lakukan logout
+    const resLogout = await app.handle(
+      new Request("http://localhost:3000/api/users/logout", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${logoutTestToken}`,
+        },
+      })
+    );
+    expect(resLogout.status).toBe(200);
+
+    // Pastikan token yang sudah logout tidak valid lagi
+    const resAfter = await app.handle(
+      new Request("http://localhost:3000/api/users/current", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${logoutTestToken}`,
+        },
+      })
+    );
+    expect(resAfter.status).toBe(401);
+    const bodyAfter = (await resAfter.json()) as { error: string };
+    expect(bodyAfter).toEqual({ error: "Unauthorized" });
   });
 });
