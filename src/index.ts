@@ -1,10 +1,41 @@
 import { Elysia } from "elysia";
+import { swagger } from "@elysiajs/swagger";
 import { routes } from "./routes";
 import { usersRoute } from "./routes/users-route";
 
 const port = Number(process.env.PORT) || 3000;
 
 export const app = new Elysia()
+  .use(
+    swagger({
+      path: "/swagger",
+      documentation: {
+        info: {
+          title: "Belajar Vibe Coding API",
+          version: "1.0.0",
+          description:
+            "API dokumentasi untuk manajemen pengguna (registrasi, login, current user, logout).",
+        },
+        servers: [
+          {
+            url: "http://localhost:3000",
+            description: "Development Server",
+          },
+        ],
+        components: {
+          securitySchemes: {
+            bearerAuth: {
+              type: "http",
+              scheme: "bearer",
+              bearerFormat: "UUID",
+              description:
+                "Masukkan token UUID yang didapatkan dari endpoint POST /api/users/login.",
+            },
+          },
+        },
+      },
+    })
+  )
   .onError(({ code, error, set }) => {
     switch (code) {
       case "NOT_FOUND":

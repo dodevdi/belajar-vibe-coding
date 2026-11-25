@@ -37,6 +37,12 @@ export const usersRoute = new Elysia({ prefix: "/api/users" })
         }),
         password: t.String({ minLength: 1, maxLength: 255 }),
       }),
+      detail: {
+        summary: "Registrasi User Baru",
+        description:
+          "Mendaftarkan user baru dengan name, email, dan password. Password akan di-hash menggunakan bcrypt sebelum disimpan ke database. Gagal jika email sudah terdaftar.",
+        tags: ["Users"],
+      },
     }
   )
   .post(
@@ -65,6 +71,12 @@ export const usersRoute = new Elysia({ prefix: "/api/users" })
         }),
         password: t.String({ minLength: 1 }),
       }),
+      detail: {
+        summary: "Login User",
+        description:
+          "Mengautentikasi user dengan email dan password. Jika berhasil, mengembalikan UUID token yang digunakan sebagai Bearer token untuk request selanjutnya.",
+        tags: ["Users"],
+      },
     }
   )
   .get(
@@ -86,6 +98,15 @@ export const usersRoute = new Elysia({ prefix: "/api/users" })
         }
         throw error;
       }
+    },
+    {
+      detail: {
+        summary: "Get Current User",
+        description:
+          "Mengembalikan data profil user yang sedang login berdasarkan Bearer token di header Authorization. Password tidak disertakan dalam response.",
+        tags: ["Users"],
+        security: [{ bearerAuth: [] }],
+      },
     }
   )
   .delete(
@@ -107,5 +128,14 @@ export const usersRoute = new Elysia({ prefix: "/api/users" })
         }
         throw error;
       }
+    },
+    {
+      detail: {
+        summary: "Logout User",
+        description:
+          "Menghapus sesi login user dari database berdasarkan Bearer token. Setelah logout, token tidak dapat digunakan lagi.",
+        tags: ["Users"],
+        security: [{ bearerAuth: [] }],
+      },
     }
   );
