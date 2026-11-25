@@ -20,6 +20,12 @@ export const app = new Elysia()
           message: "Validation Error",
           details: error.all,
         };
+      case "PARSE":
+        set.status = 400;
+        return {
+          status: 400,
+          message: "Bad Request",
+        };
       default:
         set.status = 500;
         const errorMessage = error && typeof error === "object" && "message" in error
