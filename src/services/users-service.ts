@@ -18,6 +18,7 @@ export interface CurrentUserResponse {
   id: number;
   name: string;
   email: string;
+  createdAt: Date;
   created_at: Date;
 }
 
@@ -113,6 +114,16 @@ export async function getCurrentUser(token: string): Promise<CurrentUserResponse
     id: user.id,
     name: user.name,
     email: user.email,
+    createdAt: user.createdAt,
     created_at: user.createdAt,
   };
+}
+
+export async function logoutUser(token: string): Promise<string> {
+  const [result] = await db.delete(sessions).where(eq(sessions.token, token));
+  if (result.affectedRows === 0) {
+    throw new UserServiceError("Unauthorized", 401);
+  }
+
+  return "OK";
 }

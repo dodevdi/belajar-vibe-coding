@@ -65,6 +65,7 @@ describe("GET /api/users/current - Get Current User", () => {
         id: number;
         name: string;
         email: string;
+        createdAt: string;
         created_at: string;
         password?: string;
       };
@@ -74,6 +75,7 @@ describe("GET /api/users/current - Get Current User", () => {
     expect(body.data.id).toBe(testUserId);
     expect(body.data.name).toBe(testUser.name);
     expect(body.data.email).toBe(testUser.email);
+    expect(body.data.createdAt).toBeDefined();
     expect(body.data.created_at).toBeDefined();
     // Pastikan password TIDAK dikembalikan
     expect(body.data.password).toBeUndefined();
